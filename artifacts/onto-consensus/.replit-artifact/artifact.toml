@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "OntoConsens"
+description = "A collaborative ontology engineering tool where teams upload an ontology, extract its class hierarchy, and reach consensus on class properties together. Each user drafts property proposals privately, then enters a shared real-time space where up to three collaborators (each with a distinct color) see each other's proposals stacked on class nodes, agree or retract properties, watch each other's live cursors, and export the properties every member has agreed to keep."
+version = "1.0.0"
+id = "artifacts/onto-consensus"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19982
+
+[services.development]
+run = "pnpm --filter @workspace/onto-consensus run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/onto-consensus", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/onto-consensus/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19982"
+BASE_PATH = "/"

@@ -1,0 +1,1146 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: OntoConsensus API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: projects
+    description: Project management
+  - name: properties
+    description: Class property proposals and consensus
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid input or username taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCredentials"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get the current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/api-key:
+    put:
+      operationId: updateApiKey
+      tags: [auth]
+      summary: Save or replace the OpenAI API key on the current account
+      description: >-
+        Every project this user creates uses this key for its AI moderator.
+        Never returned by any endpoint once saved -- only whether one is
+        configured.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApiKeyInput"
+      responses:
+        "200":
+          description: API key saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects the current user belongs to
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectSummary"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project from an uploaded ontology file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+        "400":
+          description: Invalid file or missing classes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/join:
+    post:
+      operationId: joinProject
+      tags: [projects]
+      summary: Join a project using an invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinProjectInput"
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+        "400":
+          description: Invalid code or project full
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get project details, members and graph
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "403":
+          description: Not a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project (owner only) — removes it for every member
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Only the owner can delete this project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /projects/{id}/ready:
+    patch:
+      operationId: setReady
+      tags: [projects]
+      summary: Toggle current member's ready-for-consensus state
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadyInput"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+
+  /projects/{id}/ws-ticket:
+    post:
+      operationId: createWsTicket
+      tags: [projects]
+      summary: Create a short-lived ticket to open the realtime connection
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WsTicket"
+
+  /ws-ticket:
+    post:
+      operationId: createUserWsTicket
+      tags: [projects]
+      summary: Create a short-lived ticket to open a user-scoped realtime connection (not tied to a single project), used to learn immediately when any of the current user's projects is deleted
+      responses:
+        "200":
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WsTicket"
+
+  /projects/{id}/properties:
+    get:
+      operationId: listProperties
+      tags: [properties]
+      summary: List properties visible to the current user for a project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Property"
+    post:
+      operationId: createProperty
+      tags: [properties]
+      summary: Propose a new property on a class
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /projects/{id}/properties/{propertyId}:
+    patch:
+      operationId: updateProperty
+      tags: [properties]
+      summary: Refine the text of a property you proposed
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PropertyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertyUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+        "403":
+          description: Not your property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: retractProperty
+      tags: [properties]
+      summary: Remove your own contribution (proposal or agreement) from a property
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PropertyId"
+      responses:
+        "204":
+          description: Removed
+
+  /projects/{id}/properties/{propertyId}/agree:
+    post:
+      operationId: agreeProperty
+      tags: [properties]
+      summary: Add your color to a property stack to agree to retain it
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/PropertyId"
+      responses:
+        "200":
+          description: Updated property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /projects/{id}/export:
+    get:
+      operationId: exportProject
+      tags: [projects]
+      summary: Export classes and fully-agreed properties as JSON
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Export file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportPayload"
+
+  /projects/{id}/export-conversation:
+    get:
+      operationId: exportConversation
+      tags: [moderator]
+      summary: >-
+        Export the full moderator conversation history (transcripts, system
+        events, and interventions) as flat, analysis-ready JSON. Unlike
+        /export, available at any point in the project's lifecycle -- not
+        gated on full agreement.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Conversation export file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationExportPayload"
+
+  /projects/{id}/moderator:
+    get:
+      operationId: getModeratorStatus
+      tags: [moderator]
+      summary: >-
+        Get whether the AI moderator is on for the CURRENT member, and
+        whether it's usable at all for this project
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Moderator status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModeratorStatus"
+    put:
+      operationId: configureModerator
+      tags: [moderator]
+      summary: >-
+        Turn the AI moderator on for the CURRENT member only (their own mic
+        and transcript), using the project creator's saved OpenAI API key.
+        Does not affect any other member.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModeratorConfigInput"
+      responses:
+        "200":
+          description: Moderator enabled for this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModeratorStatus"
+
+  /projects/{id}/moderator/disable:
+    post:
+      operationId: disableModerator
+      tags: [moderator]
+      summary: Turn the AI moderator off for the CURRENT member only
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Moderator disabled for this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModeratorStatus"
+
+  /projects/{id}/moderator/messages:
+    get:
+      operationId: listModeratorChatMessages
+      tags: [moderator]
+      summary: >-
+        Full persisted moderator chat history for this project (intro,
+        system, transcript, and intervention messages), visible to every
+        member regardless of their own mic state.
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Moderator chat history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModeratorChatMessage"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    PropertyId:
+      name: propertyId
+      in: path
+      required: true
+      schema:
+        type: integer
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    AuthCredentials:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+
+    RegisterInput:
+      type: object
+      required: [username, password, apiKey]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+        apiKey:
+          type: string
+          minLength: 1
+          description: >-
+            OpenAI API key for this account. Required at registration;
+            stored encrypted, never returned by any endpoint once saved.
+            Every project this user creates uses this key for its AI
+            moderator. Can be changed later from the dashboard.
+
+    UpdateApiKeyInput:
+      type: object
+      required: [apiKey]
+      properties:
+        apiKey:
+          type: string
+          minLength: 1
+
+    User:
+      type: object
+      required: [id, username, apiKeyConfigured]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        apiKeyConfigured:
+          type: boolean
+          description: True once this account has an OpenAI API key saved.
+
+    AuthResponse:
+      type: object
+      required: [id, username, token, apiKeyConfigured]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        token:
+          type: string
+          description: >-
+            Bearer token to send as `Authorization: Bearer <token>` on
+            subsequent requests. Stored client-side per browser tab (not a
+            shared cookie), so multiple accounts can be signed in
+            simultaneously in different tabs of the same browser.
+        apiKeyConfigured:
+          type: boolean
+          description: True once this account has an OpenAI API key saved.
+
+    ProjectInput:
+      type: object
+      required: [name, file, memberCount]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        file:
+          type: string
+          format: binary
+        memberCount:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: >-
+            Exact number of members this project is for, chosen once at
+            creation and fixed afterward. Invites are capped at this number,
+            the shared consensus space only opens once exactly this many
+            members have all marked ready, and each member's private
+            property budget is derived from this number from the start.
+        moderatorEnabled:
+          type: boolean
+          default: true
+          description: >-
+            Whether the AI moderator's messages are shown in the live
+            conversation window for this project, chosen once at creation and
+            fixed afterward -- there is no route to change it later. The
+            moderator itself always keeps running in the background
+            regardless of this setting (it still listens, transcribes, and
+            generates interventions); disabling this only hides its "intro"
+            and "intervention" messages from the live chat UI. Its messages
+            still appear normally, in their original position, in the
+            conversation export. Defaults to true.
+
+    JoinProjectInput:
+      type: object
+      required: [inviteCode]
+      properties:
+        inviteCode:
+          type: string
+
+    ReadyInput:
+      type: object
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
+
+    PropertyInput:
+      type: object
+      required: [classId, name]
+      properties:
+        classId:
+          type: integer
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    PropertyUpdate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    WsTicket:
+      type: object
+      required: [ticket]
+      properties:
+        ticket:
+          type: string
+
+    ModeratorStatus:
+      type: object
+      required: [active, configured]
+      properties:
+        active:
+          type: boolean
+          description: >-
+            Whether the AI moderator is currently on for the CURRENT member
+            (their own mic + transcript). Independent of every other member.
+        configured:
+          type: boolean
+          description: >-
+            True once the project creator's account has an OpenAI API key
+            saved -- this is what actually lets the moderator run.
+
+    ModeratorConfigInput:
+      type: object
+      properties:
+        model:
+          type: string
+          description: >-
+            Exact OpenAI model id to use for AI-generated summaries. Defaults
+            to the project's already-configured model, or "gpt-5.6-luna" the
+            first time a project is configured.
+
+    ModeratorInterventionEntry:
+      type: object
+      required: [text, by]
+      properties:
+        text:
+          type: string
+        by:
+          type: array
+          items:
+            type: string
+          description: Usernames of every member who made this same point, in the order first raised.
+
+    ModeratorChatMessage:
+      type: object
+      required: [id, type, userId, username, colorSlot, content, matched, className, propertyName, classId, propertyId, examples, counterexamples, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [intro, system, transcript, intervention, export_notice]
+          description: >-
+            "intro" is the moderator's one-time welcome message. "system" is
+            an ephemeral-looking but persisted event like a member enabling
+            their mic. "transcript" is a live-transcribed speech chunk from a
+            member. "intervention" is a stalled-discussion analysis posted by
+            the moderator itself. "export_notice" is the one-time notice
+            posted the first time a project is exported, stating that
+            consensus was reached and the AI moderator has stopped for good;
+            it is always recorded (so it appears in the conversation-export
+            file) but only rendered in the live chat UI for AI-enabled
+            projects.
+        userId:
+          type: integer
+          nullable: true
+          description: Null for moderator-authored messages (intro, intervention).
+        username:
+          type: string
+          nullable: true
+        colorSlot:
+          type: integer
+          nullable: true
+        content:
+          type: string
+        matched:
+          type: boolean
+          nullable: true
+          description: >-
+            Only meaningful for "intervention" messages -- whether the
+            discussion resolved to a real class/property in this project's
+            workspace.
+        className:
+          type: string
+          nullable: true
+        propertyName:
+          type: string
+          nullable: true
+        classId:
+          type: integer
+          nullable: true
+        propertyId:
+          type: integer
+          nullable: true
+        examples:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ModeratorInterventionEntry"
+          description: >-
+            Structured "for keeping it" points, only for a matched
+            intervention message -- what the UI renders as the green
+            supporter-pill card.
+        counterexamples:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/ModeratorInterventionEntry"
+          description: >-
+            Structured "for removing it" points, only for a matched
+            intervention message -- what the UI renders as the red
+            supporter-pill card.
+        createdAt:
+          type: string
+          format: date-time
+
+    Member:
+      type: object
+      required: [userId, username, colorSlot, ready, isOwner]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        colorSlot:
+          type: integer
+        ready:
+          type: boolean
+        isOwner:
+          type: boolean
+
+    OntologyClass:
+      type: object
+      required: [id, uri, label, propertyCount, atPropertyCap]
+      properties:
+        id:
+          type: integer
+        uri:
+          type: string
+        label:
+          type: string
+        propertyCount:
+          type: integer
+          description: >-
+            Number of distinct properties the REQUESTING member has proposed
+            for this class. Each member has their own fixed budget (see
+            atPropertyCap) — there is no shared/global cap and no cross-member
+            duplicate check, so this never reflects other members' proposals.
+        atPropertyCap:
+          type: boolean
+          description: >-
+            True once the requesting member has reached their own budget of
+            distinct properties for this class (budget depends on project
+            member count and join order — e.g. 7/4+3/3+2+2 for 1/2/3
+            members). Used to hide the "add property" affordance once THIS
+            member is out of budget; other members may still have room.
+
+    OntologyRelation:
+      type: object
+      required: [childId, parentId]
+      properties:
+        childId:
+          type: integer
+        parentId:
+          type: integer
+
+    ProjectSummary:
+      type: object
+      required:
+        [
+          id,
+          name,
+          inviteCode,
+          ownerId,
+          memberCount,
+          maxMembers,
+          moderatorEnabled,
+          createdAt,
+        ]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        inviteCode:
+          type: string
+        ownerId:
+          type: integer
+        memberCount:
+          type: integer
+        maxMembers:
+          type: integer
+        moderatorEnabled:
+          type: boolean
+          description: >-
+            Whether the AI moderator's messages are shown in this project's
+            live conversation window. Fixed at creation.
+        exportedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Set the moment any member first downloads the ontology export
+            (see GET /projects/{id}/export). Once set, the AI moderator never
+            runs again for this project and the conversation shown to
+            members is frozen at the consensus reached at that point. Null
+            means the project hasn't been exported yet.
+        createdAt:
+          type: string
+          format: date-time
+
+    ProjectDetail:
+      type: object
+      required:
+        [
+          id,
+          name,
+          inviteCode,
+          ownerId,
+          maxMembers,
+          moderatorEnabled,
+          createdAt,
+          members,
+          classes,
+          relations,
+        ]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        inviteCode:
+          type: string
+        ownerId:
+          type: integer
+        maxMembers:
+          type: integer
+        moderatorEnabled:
+          type: boolean
+          description: >-
+            Whether the AI moderator's messages are shown in this project's
+            live conversation window. Fixed at creation.
+        exportedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Set the moment any member first downloads the ontology export
+            (see GET /projects/{id}/export). Once set, the AI moderator never
+            runs again for this project and the conversation shown to
+            members is frozen at the consensus reached at that point. Null
+            means the project hasn't been exported yet.
+        createdAt:
+          type: string
+          format: date-time
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/OntologyClass"
+        relations:
+          type: array
+          items:
+            $ref: "#/components/schemas/OntologyRelation"
+
+    PropertyAgreement:
+      type: object
+      required: [userId, username, colorSlot]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        colorSlot:
+          type: integer
+
+    Property:
+      type: object
+      required:
+        [
+          id,
+          classId,
+          name,
+          proposedByUserId,
+          proposedByUsername,
+          proposedByColorSlot,
+          createdAt,
+          agreements,
+          agreedByAll,
+        ]
+      properties:
+        id:
+          type: integer
+        classId:
+          type: integer
+        name:
+          type: string
+        proposedByUserId:
+          type: integer
+        proposedByUsername:
+          type: string
+        proposedByColorSlot:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        agreements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PropertyAgreement"
+        agreedByAll:
+          type: boolean
+
+    ExportClass:
+      type: object
+      required: [label, properties, children]
+      properties:
+        label:
+          type: string
+        properties:
+          type: array
+          items:
+            type: string
+          description: Only properties every specified member has agreed on.
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportClass"
+          description: Direct subclasses, nested recursively — represents the ontology's class hierarchy structurally instead of via a parent reference.
+
+    ExportMeta:
+      type: object
+      required: [projectName, exportedAt, memberCount]
+      properties:
+        projectName:
+          type: string
+        exportedAt:
+          type: string
+          format: date-time
+        memberCount:
+          type: integer
+          description: The project's specified number of members (not just however many have joined).
+
+    ExportPayload:
+      type: object
+      required: [meta, classes]
+      properties:
+        meta:
+          $ref: "#/components/schemas/ExportMeta"
+        classes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportClass"
+
+    ConversationExportMember:
+      type: object
+      required: [userId, username, colorSlot]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+        colorSlot:
+          type: integer
+
+    ConversationExportMeta:
+      type: object
+      required: [projectId, projectName, exportedAt, memberCount, members]
+      properties:
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        exportedAt:
+          type: string
+          format: date-time
+        memberCount:
+          type: integer
+          description: The project's specified number of members (not just however many have joined).
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationExportMember"
+
+    ConversationExportIntervention:
+      type: object
+      required: [matched, classId, propertyId, className, propertyName, examples, counterexamples]
+      properties:
+        matched:
+          type: boolean
+          description: Whether the discussion resolved to a real class/property in this project's workspace.
+        classId:
+          type: integer
+          nullable: true
+        propertyId:
+          type: integer
+          nullable: true
+        className:
+          type: string
+          nullable: true
+        propertyName:
+          type: string
+          nullable: true
+        examples:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModeratorInterventionEntry"
+        counterexamples:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModeratorInterventionEntry"
+
+    ConversationExportMessage:
+      type: object
+      required: [sequence, id, type, timestamp, speakerUserId, speakerUsername, content, intervention]
+      properties:
+        sequence:
+          type: integer
+          description: 1-based position in the conversation, in chronological order.
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [intro, system, transcript, intervention, export_notice]
+        timestamp:
+          type: string
+          format: date-time
+        speakerUserId:
+          type: integer
+          nullable: true
+          description: Null for moderator-authored messages (intro, intervention).
+        speakerUsername:
+          type: string
+          nullable: true
+        content:
+          type: string
+          description: Plain-text content -- always populated, even for a structured intervention.
+        intervention:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ConversationExportIntervention"
+          description: Present only for type "intervention"; null for every other message type.
+
+    ConversationExportPayload:
+      type: object
+      required: [meta, messageCount, messages]
+      properties:
+        meta:
+          $ref: "#/components/schemas/ConversationExportMeta"
+        messageCount:
+          type: integer
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationExportMessage"

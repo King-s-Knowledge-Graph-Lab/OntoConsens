@@ -1,0 +1,1 @@
+{"version":3,"file":"ontologyClass.d.ts","sourceRoot":"","sources":["../../../src/generated/types/ontologyClass.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,aAAa;IAC5B,EAAE,EAAE,MAAM,CAAC;IACX,GAAG,EAAE,MAAM,CAAC;IACZ,KAAK,EAAE,MAAM,CAAC;IACd,wQAAwQ;IACxQ,aAAa,EAAE,MAAM,CAAC;IACtB,wTAAwT;IACxT,aAAa,EAAE,OAAO,CAAC;CACxB"}
